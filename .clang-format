@@ -1,0 +1,30 @@
+BasedOnStyle: Google
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 0
+
+BreakBeforeBraces: Attach
+BraceWrapping:
+  AfterControlStatement: false
+  AfterFunction: false
+  AfterClass: false
+  AfterNamespace: false
+
+AllowShortBlocksOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortCaseLabelsOnASingleLine: true
+
+AlignConsecutiveDeclarations: false
+AlignConsecutiveAssignments: false
+AlignAfterOpenBracket: DontAlign
+AlignOperands: false
+AlignEscapedNewlines: Left
+
+SpaceBeforeParens: ControlStatements
+PointerAlignment: Left
+SortIncludes: false
+ReflowComments: false
+KeepEmptyLinesAtTheStartOfBlocks: false

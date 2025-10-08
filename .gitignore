@@ -1,0 +1,27 @@
+# C++ build outputs
+*.o
+*.a
+*.so
+*.exe
+*.out
+*.app
+
+# CMake build directories
+build/
+CMakeFiles/
+cmake_install.cmake
+CMakeCache.txt
+Makefile
+*.cmake
+
+# Log files
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# System
+.DS_Store
+Thumbs.db
