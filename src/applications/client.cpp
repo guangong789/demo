@@ -9,7 +9,7 @@ using namespace test::socket;
 using namespace gaozu::logger;
 
 int main(int argc, char* argv[]) {
-    gaozu::init::LoggerInitializer::create("logs/client.log")
+    LoggerInitializer::create("logs/client.log")
         .set_console(true)
         .set_level(Logger::INFO)
         .set_max_size(1 * 1024)

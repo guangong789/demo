@@ -29,7 +29,7 @@ bool Epoll::ep_add(int fd, uint32_t event) {
     return true;
 }
 
-bool Epoll::ep_delete(int fd) {
+bool Epoll::ep_del(int fd) {
     if (epoll_ctl(m_epfd, EPOLL_CTL_DEL, fd, nullptr) < 0) {
         log_error("epoll_ctl DEL failed: fd=%d errno=%d errmsg=%s", fd, errno, strerror(errno));
         return false;
@@ -37,7 +37,7 @@ bool Epoll::ep_delete(int fd) {
     return true;
 }
 
-bool Epoll::ep_modify(int fd, uint32_t event) {
+bool Epoll::ep_mod(int fd, uint32_t event) {
     struct epoll_event ev;
     ev.events = event;
     ev.data.fd = fd;

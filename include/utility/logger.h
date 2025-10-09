@@ -3,6 +3,12 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <time.h>
+#include <cstring>
+#include <stdexcept>
+#include <stdarg.h>
+#include <sys/stat.h>
+#include <filesystem>
 #include <algorithm>
 
 namespace gaozu

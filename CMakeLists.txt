@@ -27,24 +27,19 @@ add_library(gaozu_socket STATIC
 add_library(gaozu_utility STATIC
     src/utility/logger.cpp
     src/utility/epoll.cpp
-)
-
-# Agent 监控库
-add_library(gaozu_agent STATIC
-    src/agent/sys_monitor.cpp
-    src/agent/proc_manager.cpp
-    src/agent/file_watcher.cpp
+    src/utility/connct.cpp
 )
 
 # 设置库的包含目录
 target_include_directories(gaozu_socket PUBLIC include)
 target_include_directories(gaozu_utility PUBLIC include)
-target_include_directories(gaozu_agent PUBLIC include)
 
 # 查找并链接线程库
 find_package(Threads REQUIRED)
 target_link_libraries(gaozu_socket Threads::Threads)
-target_link_libraries(gaozu_agent Threads::Threads)
+
+# Utility 库可能也需要线程库（如果 logger 或 epoll 使用了线程）
+target_link_libraries(gaozu_utility Threads::Threads)
 
 # 可执行文件 - 服务端
 add_executable(server
@@ -58,30 +53,39 @@ add_executable(client
 )
 target_link_libraries(client gaozu_socket gaozu_utility)
 
-# 可执行文件 - 监控Agent
-add_executable(monitor_agent
-    src/applications/monitor_agent.cpp
-)
-target_link_libraries(monitor_agent gaozu_agent gaozu_socket gaozu_utility)
-
 # 设置输出目录
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# 安装规则
-install(TARGETS server client monitor_agent
+# 安装目标
+install(TARGETS server client
     RUNTIME DESTINATION bin
 )
 
-# 安装配置文件
-install(DIRECTORY config/ DESTINATION config)
+install(TARGETS gaozu_socket gaozu_utility
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+)
+
+# 安装头文件
+install(DIRECTORY include/ DESTINATION include)
+
+# 安装配置文件（如果存在 config 目录）
+if(EXISTS "${CMAKE_SOURCE_DIR}/config")
+    install(DIRECTORY config/ DESTINATION config)
+endif()
 
 # 输出信息
 message(STATUS "=== NETWORK Project Configuration ===")
-message(STATUS "Project: ${PROJECT_NAME} ${PROJECT_VERSION}")
+message(STATUS "Project: ${PROJECT_NAME}")
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Output Directory: ${CMAKE_BINARY_DIR}/bin")
-message(STATUS "Libraries: gaozu_socket, gaozu_utility, gaozu_agent")
-message(STATUS "Executables: server, client, monitor_agent")
+message(STATUS "Libraries: gaozu_socket, gaozu_utility")
+message(STATUS "Executables: server, client")
+message(STATUS "Source Structure:")
+message(STATUS "  - Socket Library: src/socket/")
+message(STATUS "  - Utility Library: src/utility/")
+message(STATUS "  - Applications: src/applications/")
+message(STATUS "  - Headers: include/")

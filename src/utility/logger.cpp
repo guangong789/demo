@@ -1,11 +1,5 @@
 #include "utility/logger.h"
-#include <time.h>
-#include <cstring>
-#include <stdexcept>
-#include <iostream>
-#include <stdarg.h>
-#include <sys/stat.h>
-#include <filesystem>
+
 namespace fs = std::filesystem;
 using namespace gaozu::logger;
 

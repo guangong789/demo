@@ -15,8 +15,8 @@ public:
     ~Epoll();
 
     bool ep_add(int fd, uint32_t event);
-    bool ep_delete(int fd);
-    bool ep_modify(int fd, uint32_t event);
+    bool ep_del(int fd);
+    bool ep_mod(int fd, uint32_t event);
     int ep_wait(std::vector<struct epoll_event>& events, int timeout = -1);
 private:
     int m_epfd;
