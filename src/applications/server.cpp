@@ -10,6 +10,7 @@
 #include "utility/connct.h"
 #include "utility/log_init.h"
 #include "utility/epoll.h"
+
 using namespace test::socket;
 using namespace gaozu::logger;
 
@@ -36,38 +37,41 @@ int main(int argc, char* argv[]) {
         // 遍历所有触发的事件
         for (int i = 0; i < nready; ++i) {
             int fd = events[i].data.fd;
+            uint32_t ev = events[i].events;
+
             if (fd == server.get_fd()) {  // 是服务端
                 while (true) {
-                    int connfd = server.accept();
-                    if (connfd < 0) {
-                        if (errno == EAGAIN || errno == EWOULDBLOCK) break;  // 没有更多连接
-                        log_error("accept error: errno=%d, errmsg=%s", errno, strerror(errno));
+                    auto client = server.accept_client();
+                    if (!client) {
                         break;
                     }
-                    log_info("New client connected: %d", connfd);
+                    int connfd = client->release_fd();  // 防止double close
                     ep.ep_add(connfd, EPOLLIN);
-
                     auto conn = std::make_shared<Connct>(connfd);
                     connections[connfd] = conn;
                 }
-            } else if (events[i].events & EPOLLIN) {  // 客户端有数据可读
+            } else if (ev & EPOLLIN) {  // 客户端有数据可读
                 auto it = connections.find(fd);
                 if (it == connections.end()) continue;
 
                 auto conn = it->second;
-                bool ok = conn->on_read();
+                std::string received;
+                bool ok = conn->on_read(received);
                 if (!ok) {
                     ep.ep_del(fd);
                     connections.erase(it);
                     shutdown(fd, SHUT_RDWR);
                 } else {
+                    if (!received.empty()) {
+                        conn->send_data(received);
+                    }
                     if (conn->has_pending_data()) {
                         ep.ep_mod(fd, EPOLLIN | EPOLLOUT);
                     } else {
                         ep.ep_mod(fd, EPOLLIN);
                     }
                 }
-            } else if (events[i].events & EPOLLOUT) {  // 监视可写
+            } else if (ev & EPOLLOUT) {  // 监视可写
                 auto it = connections.find(fd);
                 if (it == connections.end()) continue;
 
@@ -78,7 +82,7 @@ int main(int argc, char* argv[]) {
                     connections.erase(it);
                     shutdown(fd, SHUT_RDWR);
                 }
-            } else if (events[i].events & (EPOLLERR | EPOLLHUP)) {  // 异常事件
+            } else if (ev & (EPOLLERR | EPOLLHUP)) {  // 异常事件
                 log_warn("Client %d error or hang up", fd);
                 ep.ep_del(fd);
                 connections.erase(fd);
@@ -86,9 +90,8 @@ int main(int argc, char* argv[]) {
             }
         }
     }
-    // 清理资源
+    
     log_info("Shutting down server...");
-    // 关闭socket
     server.close();
     return 0;
 }

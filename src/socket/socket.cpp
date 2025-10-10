@@ -2,7 +2,7 @@
 using namespace test::socket;
 using namespace gaozu::logger;
 
-Socket::Socket() : m_ip(""), m_port(0), m_sockfd(0) {
+Socket::Socket() : m_ip(""), m_port(0), m_sockfd(-1) {
     // 创建socket
     m_sockfd = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (m_sockfd < 0) { 
@@ -14,7 +14,11 @@ Socket::Socket() : m_ip(""), m_port(0), m_sockfd(0) {
 Socket::Socket(int sockfd) : m_ip(""), m_port(0), m_sockfd(sockfd) {}
 
 Socket::~Socket() {
-    close();
+    if (m_sockfd >= 0) {
+        ::close(m_sockfd);
+        m_sockfd = -1;
+        log_debug("Socket closed");
+    }
 }
 
 int Socket::get_fd() const {
@@ -57,8 +61,12 @@ bool Socket::connect(const std::string& ip, int port) {
     sockaddr.sin_addr.s_addr = inet_addr(ip.c_str());
     sockaddr.sin_port = htons(port);
     if (::connect(m_sockfd, (struct sockaddr*) &sockaddr, sizeof(sockaddr)) < 0) {
-        log_error("socket connect error: errno = %d, errmsg = %s", errno, strerror(errno));
-        return false;
+        if (errno == EINPROGRESS) {  // 非阻塞连接正在进行中，不算错误
+            log_info("non-blocking connect in progress to %s:%d", ip.c_str(), port);
+        } else {
+            log_error("socket connect error: errno = %d, errmsg = %s", errno, strerror(errno));
+            return false;
+        }
     }
     m_ip = ip;
     m_port = port;
