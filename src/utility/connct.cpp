@@ -18,37 +18,35 @@ int Connct::get_fd() const {
     return m_fd;
 }
 
-// 接收数据到独立缓冲区，不再自动发送
 bool Connct::on_read(std::string& data) {
-    char buf[4096];
-    ssize_t len = recv(m_fd, buf, sizeof(buf), 0);
+    char buf[1024];
+    ssize_t len = recv(m_fd, buf, sizeof(buf), 0);  // 从内核缓冲区读数据到buf
     if (len < 0) {
         if (errno == EINTR) return true;
-        if (errno == EAGAIN || errno == EWOULDBLOCK) return true;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return true;  // 没有数据可读
         log_error("recv error from client %d: errno=%d, errmsg=%s", m_fd, errno, strerror(errno));
         return false;
     } else if (len == 0) {
         log_info("Client %d disconnected", m_fd);
         return false;
     } else {
-        data.assign(buf, len);
+        data.assign(buf, len);  // assign能够处理'\0'，存到外部data中
         log_info("Received from client %d: %.100s", m_fd, buf);
         return true;
     }
 }
 
-// 发送缓冲区只存待发送的数据
 bool Connct::send_data(const std::string& data) {
     if (data.empty()) return true;
     m_write_data += data;
-
+    // 先存到发送缓冲区，再尝试立即发送一次
     ssize_t sent = send(m_fd, m_write_data.data(), m_write_data.size(), 0);
     if (sent < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) return true;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return true;  // 内核缓冲区满了
         log_error("send error to client %d: %s", m_fd, strerror(errno));
         return false;
     }
-    m_write_data.erase(0, sent);
+    m_write_data.erase(0, sent);  // 发送成功就删除已发送的部分
     return true;
 }
 

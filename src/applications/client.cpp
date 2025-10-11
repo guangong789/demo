@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
     auto conn = std::make_shared<Connct>(sockfd);
 
     std::atomic<bool> running(true);  // 多线程内部可见
-    std::string input_buffer;
+    std::string input_buffer;  // 用户命令
 
     fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
 
@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
             int fd = events[i].data.fd;
             uint32_t ev = events[i].events;
 
-            if (fd == sockfd && (ev & EPOLLIN)) {
+            if (fd == sockfd && (ev & EPOLLIN)) {  // 服务器数据到达
                 std::string received;
                 bool ok = conn->on_read(received);
                 if (!ok) {
@@ -54,13 +54,13 @@ int main(int argc, char* argv[]) {
                 if (!received.empty()) {
                     std::cout << "[Server] " << received << std::endl;
                 }
-            } else if (fd == STDIN_FILENO && (ev & EPOLLIN)) {
+            } else if (fd == STDIN_FILENO && (ev & EPOLLIN)) {  // 用户输入处理
                 char buf[1024];
                 ssize_t len = read(STDIN_FILENO, buf, sizeof(buf));
                 if (len > 0) {
                     input_buffer.append(buf, len);
                     size_t pos;
-                    while ((pos = input_buffer.find('\n')) != std::string::npos) {
+                    while ((pos = input_buffer.find('\n')) != std::string::npos) {  // 凑齐一行再发出
                         std::string line = input_buffer.substr(0, pos);
                         input_buffer.erase(0, pos + 1);
 
@@ -72,6 +72,7 @@ int main(int argc, char* argv[]) {
                             conn->send_data(line);
                             if (conn->has_pending_data()) {
                                 ep.ep_mod(sockfd, EPOLLIN | EPOLLOUT);
+                                // 监听一下什么时候可以写入内核缓冲区
                             }
                         }
                     }
@@ -84,7 +85,7 @@ int main(int argc, char* argv[]) {
                 }
                 if (conn->has_pending_data()) {
                     ep.ep_mod(sockfd, EPOLLIN | EPOLLOUT);
-                } else {
+                } else {  //  没有数据，回到只读模式
                     ep.ep_mod(sockfd, EPOLLIN);
                 }
             } else if (ev & (EPOLLHUP | EPOLLERR)) {  // 异常处理
