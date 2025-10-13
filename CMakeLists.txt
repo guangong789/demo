@@ -28,6 +28,7 @@ add_library(gaozu_utility STATIC
     src/utility/logger.cpp
     src/utility/epoll.cpp
     src/utility/connct.cpp
+    src/utility/threadpool.cpp
 )
 
 # 设置库的包含目录

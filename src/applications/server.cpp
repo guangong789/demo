@@ -10,6 +10,7 @@
 #include "utility/connct.h"
 #include "utility/log_init.h"
 #include "utility/epoll.h"
+#include "utility/threadpool.h"
 
 using namespace test::socket;
 using namespace gaozu::logger;
