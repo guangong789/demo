@@ -29,6 +29,7 @@ add_library(gaozu_utility STATIC
     src/utility/epoll.cpp
     src/utility/connct.cpp
     src/utility/threadpool.cpp
+    src/utility/conn_manager.cpp
 )
 
 # 设置库的包含目录
@@ -39,7 +40,6 @@ target_include_directories(gaozu_utility PUBLIC include)
 find_package(Threads REQUIRED)
 target_link_libraries(gaozu_socket Threads::Threads)
 
-# Utility 库可能也需要线程库（如果 logger 或 epoll 使用了线程）
 target_link_libraries(gaozu_utility Threads::Threads)
 
 # 可执行文件 - 服务端

@@ -16,10 +16,12 @@ ClientSocket::ClientSocket(const std::string &ip, int port, bool non_blocking) :
 
 ClientSocket::~ClientSocket() {}
 
-int ClientSocket::release_fd() {
-    int fd = m_sockfd;
-    m_sockfd = -1;
-    return fd;
+void ClientSocket::close_fd() {
+    std::unique_lock<std::mutex> locker(mtx);
+    if (m_sockfd >= 0) {
+        ::close(m_sockfd);
+        m_sockfd = -1;
+    }
 }
 
 bool ClientSocket::set_non_blocking(bool non_blocking) {

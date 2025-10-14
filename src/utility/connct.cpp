@@ -2,16 +2,16 @@
 
 using namespace gaozu::logger;
 
-Connct::Connct(int fd) : m_fd(fd) {
+Connct::Connct(int fd, bool close) : m_fd(fd), closed(close) {
+    log_info("Connection created: %d", m_fd);
+}
+
+Connct::Connct(std::shared_ptr<ClientSocket> socket) : client(socket), m_fd(socket->get_fd()) {
     log_info("Connection created: %d", m_fd);
 }
 
 Connct::~Connct() {
-    if (m_fd >= 0) {
-        close(m_fd);
-        log_info("Connection closed: %d", m_fd);
-        m_fd = -1;
-    }
+    close();
 }
 
 int Connct::get_fd() const {
@@ -19,6 +19,8 @@ int Connct::get_fd() const {
 }
 
 bool Connct::on_read(std::string& data) {
+    std::lock_guard<std::mutex> lock(mtx);
+    if (is_closed()) return false;
     char buf[1024];
     ssize_t len = recv(m_fd, buf, sizeof(buf), 0);  // 从内核缓冲区读数据到buf
     if (len < 0) {
@@ -51,6 +53,8 @@ bool Connct::send_data(const std::string& data) {
 }
 
 bool Connct::on_write() {
+    std::lock_guard<std::mutex> lock(mtx);
+    if (is_closed()) return false;
     if (m_write_data.empty()) return true;
     ssize_t sent = send(m_fd, m_write_data.data(), m_write_data.size(), 0);
     if (sent < 0) {
@@ -64,4 +68,26 @@ bool Connct::on_write() {
 
 bool Connct::has_pending_data() const {
     return !m_write_data.empty();
+}
+
+void Connct::close() {
+    bool expected = false;
+    if (!closed.compare_exchange_strong(expected, true)) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(mtx);
+    if (client) {
+        client->close_fd();
+        client.reset();
+    }
+    log_info("Connection closed: %d", m_fd);
+}
+
+bool Connct::is_closed() const {
+    return closed.load();
+}
+
+void Connct::change_closed() {
+    std::lock_guard<std::mutex> lock(mtx);
+    closed = true;
 }

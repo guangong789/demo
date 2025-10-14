@@ -17,8 +17,7 @@ int main(int argc, char* argv[]) {
     LoggerInitializer::create("logs/client.log")
         .set_console(true)
         .set_level(Logger::INFO)
-        .set_max_size(10 * 1024)
-        .set_backup_count(1);
+        .set_max_size(10 * 1024);
 
     gaozu::socket::ClientSocket client("127.0.0.1", 8080);
     log_info("Connected to server 127.0.0.1:8080 using epoll");
@@ -32,7 +31,7 @@ int main(int argc, char* argv[]) {
     auto conn = std::make_shared<Connct>(sockfd);
 
     std::atomic<bool> running(true);  // 多线程内部可见
-    std::string input_buffer;  // 用户命令
+    std::string input_buffer;         // 用户命令
 
     fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
 

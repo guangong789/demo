@@ -12,7 +12,7 @@
 
 class Threadpool {
    public:
-    Threadpool(int min = 4, int max = std::thread::hardware_concurrency());
+    explicit Threadpool(int cnt = std::thread::hardware_concurrency());
     ~Threadpool();
 
     template <typename F, typename... Args>
@@ -39,8 +39,6 @@ class Threadpool {
 
    private:
     std::vector<std::thread> m_workers;
-    std::atomic<int> m_curThread;
-    std::atomic<int> m_idleThread;              // 空闲线程数量
     std::atomic<bool> m_stop;                   // 开关
     std::queue<std::function<void()>> m_tasks;  // 可调用对象
     std::mutex m_queueMutex;                    // 互斥锁

@@ -1,8 +1,8 @@
 #include "utility/threadpool.h"
 
-Threadpool::Threadpool(int min, int max) : m_stop(false), m_idleThread(min), m_curThread(min) {
+Threadpool::Threadpool(int cnt) : m_stop(false) {
     // 创建工作线程
-    for (int i = 0; i < min; ++i) {
+    for (int i = 0; i < cnt; ++i) {
         m_workers.emplace_back(&Threadpool::worker, this);
     }
 }
@@ -35,8 +35,6 @@ void Threadpool::worker() {
             task = move(m_tasks.front());
             m_tasks.pop();
         }
-        m_idleThread--;
         task();
-        m_idleThread++;
     }
 }
