@@ -2,6 +2,7 @@
 #include <unordered_map>
 #include <shared_mutex>
 #include "connct.h"
+#include "epoll.h"
 
 class ConnManager {
 public:
@@ -12,7 +13,8 @@ public:
     void remove(int fd);
     std::shared_ptr<Connct> get_ptr(int fd);
     void for_each(std::function<void(int, std::shared_ptr<Connct>&)> fn);
-    void close_all();
+    void sweep_closed(Epoll& ep);
+    void close_all(Epoll* ep = nullptr);
 
 private:
     std::unordered_map<int, std::shared_ptr<Connct>> m_conns;

@@ -77,9 +77,9 @@ bool Request::is_complete(const std::string& buf) {
     return buf.size() >= total_len;
 }
 
-size_t Request::get_total_length(const std::string &buf) {
+int Request::get_total_length(const std::string &buf) {
     auto pos = buf.find("\r\n\r\n");
-    if (pos == std::string::npos) return 0; // 头部不完整
+    if (pos == std::string::npos) return 0;
 
     auto it = buf.find("Content-Length:");
     int content_len = 0;

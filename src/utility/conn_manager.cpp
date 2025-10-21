@@ -33,14 +33,27 @@ void ConnManager::for_each(std::function<void(int, std::shared_ptr<Connct>&)> f)
     }
 }
 
-void ConnManager::close_all() {
+void ConnManager::sweep_closed(Epoll& ep) {
+    std::unique_lock<std::shared_mutex> locker(shared_mtx);
+    std::vector<int> to_remove;
+    for (auto& [fd, conn] : m_conns) {
+        if (conn && conn->is_closed()) {
+            ep.ep_del(fd);
+            conn->close();
+            to_remove.push_back(fd);
+        }
+    }
+    for (int fd : to_remove) {
+        m_conns.erase(fd);
+    }
+}
+
+void ConnManager::close_all(Epoll* ep) {
     std::unique_lock<std::shared_mutex> locker(shared_mtx);
     for (auto& [fd, conn] : m_conns) {
-        if (conn) {
-            conn->close();
-        } else {
-            ::close(fd);
-        }
+        if (ep) ep->ep_del(fd);
+        if (conn) conn->close();
+        else ::close(fd);
     }
     m_conns.clear();
 }

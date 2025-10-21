@@ -43,15 +43,11 @@ int main(int argc, char* argv[]) {
             uint32_t ev = events[i].events;
 
             if (fd == sockfd && (ev & EPOLLIN)) {  // 服务器数据到达
-                std::string received;
-                bool ok = conn->on_read(received);
+                bool ok = conn->on_read();
                 if (!ok) {
                     log_info("Server closed connection");
                     running = false;
                     break;
-                }
-                if (!received.empty()) {
-                    std::cout << "[Server] " << received << std::endl;
                 }
             } else if (fd == STDIN_FILENO && (ev & EPOLLIN)) {  // 用户输入处理
                 char buf[1024];

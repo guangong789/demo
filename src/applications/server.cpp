@@ -30,12 +30,12 @@ void handle_sigint(int) {
 
 int main(int argc, char* argv[]) {
     std::signal(SIGINT, handle_sigint);
-
+    // 日志初始化
     LoggerInitializer::create("logs/server.log")
         .set_console(true)
         .set_level(Logger::INFO)
         .set_max_size(10 * 1024);
-    // 初始化router
+    // 初始化路由
     Router::instance().add_route("/", [](const Request&) {
         return Response::make_html(200, "<h1>Hello, HTTP Server!</h1>");
     });
@@ -54,20 +54,16 @@ int main(int argc, char* argv[]) {
     Threadpool pool;
 
     while (running) {
-        // wait and fetch，内核操作
-        int nready = ep.ep_wait(events, 500);
+        int nready = ep.ep_wait(events, 500);  // wait and fetch
         if (!running) break;
-        // 遍历所有触发的事件
+        ep.flush_pending_ops();
         for (int i = 0; i < nready; ++i) {
             int fd = events[i].data.fd;
             uint32_t ev = events[i].events;
-
-            if (fd == server.get_fd()) {  // 是服务端
+            if (fd == server.get_fd()) {  // 新客户端连接
                 while (true) {
                     auto client = server.accept_client();
-                    if (!client) {
-                        break;
-                    }
+                    if (!client) break;
                     auto conn = std::make_shared<Connct>(client);
                     int connfd = conn->get_fd();
                     ep.ep_add(connfd, EPOLLIN | EPOLLET);
@@ -76,55 +72,60 @@ int main(int argc, char* argv[]) {
             } else if (ev & (EPOLLIN | EPOLLOUT)) {
                 auto conn = conn_mng.get_ptr(fd);
                 if (!conn) continue;
-                auto ep_ptr = &ep;
-                auto conn_mng_ptr = &conn_mng;
-                pool.add_task([fd, conn, ev, ep_ptr, conn_mng_ptr]() {
+                pool.add_task([fd, conn, ev, &ep, &conn_mng]() {
                     if (ev & EPOLLIN) {
                         bool ok = conn->on_read();
                         if (!ok) {
-                            ep_ptr->ep_del(fd);
+                            ep.request_del(fd);
                             conn->close();
-                            conn_mng_ptr->remove(fd);
+                            conn_mng.remove(fd);
                             return;
                         }
                         while (Request::is_complete(conn->get_read_buf())) {
                             size_t req_len = Request::get_total_length(conn->get_read_buf());
                             Request req = Request::parse(conn->get_read_buf().substr(0, req_len));
-
+                            if (req.headers["Expect"] == "100-continue") {
+                                std::string continue_resp = "HTTP/1.1 100 Continue\r\n\r\n";
+                                while (!conn->send_data(continue_resp)) {
+                                    ep.request_mod(fd, EPOLLOUT | EPOLLIN);
+                                    return;
+                                }
+                            }
                             conn->set_keep_alive(req.keep_alive);
+
                             Response resp = Router::instance().handler(req);
                             if (!conn->send_data(resp.serialize(req.keep_alive))) {
-                                ep_ptr->ep_del(fd);
+                                ep.request_del(fd);
                                 conn->close();
-                                conn_mng_ptr->remove(fd);
+                                conn_mng.remove(fd);
                                 return;
                             }
                             conn->clear_read_buf(req_len);
                             if (!conn->get_keep_alive()) {
-                                ep_ptr->ep_del(fd);
+                                ep.request_del(fd);
                                 conn->close();
-                                conn_mng_ptr->remove(fd);
+                                conn_mng.remove(fd);
                                 return;
                             }
                         }
                         uint32_t new_event = EPOLLIN;
                         if (conn->has_pending_data()) new_event |= EPOLLOUT;
-                        ep_ptr->ep_mod(fd, new_event);
+                        ep.request_mod(fd, new_event);
                     }
                     if (ev & EPOLLOUT) {
                         bool ok = conn->on_write();
                         if (!ok) {
-                            ep_ptr->ep_del(fd);
+                            ep.request_del(fd);
                             conn->close();
-                            conn_mng_ptr->remove(fd);
+                            conn_mng.remove(fd);
                         } else if (!conn->has_pending_data()) {
-                            ep_ptr->ep_mod(fd, EPOLLIN);
+                            ep.request_mod(fd, EPOLLIN);
                         }
                     }
                 });
-            } else if (ev & (EPOLLERR | EPOLLHUP)) {  // 异常事件
+            } else if (ev & (EPOLLERR | EPOLLHUP)) {
                 log_warn("Client %d error or hang up", fd);
-                ep.ep_del(fd);
+                ep.request_del(fd);
                 conn_mng.remove(fd);
             }
         }

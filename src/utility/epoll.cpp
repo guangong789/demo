@@ -55,3 +55,25 @@ int Epoll::ep_wait(std::vector<struct epoll_event>& events, int timeout) {
     }
     return nready;
 }
+
+void Epoll::request_mod(int fd, uint32_t event) {
+    std::lock_guard<std::mutex> locker(pending_mtx);
+    pending_ops.emplace(fd, event, 1);
+}
+
+void Epoll::request_del(int fd) {
+    std::lock_guard<std::mutex> locker(pending_mtx);
+    pending_ops.emplace(fd, 0, 2);
+}
+
+void Epoll::flush_pending_ops() {
+    std::lock_guard<std::mutex> lk(pending_mtx);
+    while (!pending_ops.empty()) {
+        auto op = pending_ops.front();
+        pending_ops.pop();
+        if (op.op == 1)
+            ep_mod(op.fd, op.event);
+        else if (op.op == 2)
+            ep_del(op.fd);
+    }
+}
