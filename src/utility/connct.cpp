@@ -3,11 +3,11 @@
 using namespace gaozu::logger;
 
 Connct::Connct(int fd, bool close) : m_fd(fd), closed(close), keep_alive(false) {
-    log_info("Connection created: %d", m_fd);
+    log_debug("Connection created: %d", m_fd);
 }
 
-Connct::Connct(std::shared_ptr<ClientSocket> socket) : client(socket), m_fd(socket->get_fd()), keep_alive(false) {
-    log_info("Connection created: %d", m_fd);
+Connct::Connct(std::shared_ptr<ClientSocket> socket) : m_fd(socket->get_fd()), client(socket), keep_alive(false) {
+    log_debug("Connection created: %d", m_fd);
 }
 
 Connct::~Connct() {
@@ -98,7 +98,7 @@ void Connct::close() {
         client->close_fd();
         client.reset();
     }
-    log_info("Connection closed: %d", m_fd);
+    log_debug("Connection closed: %d", m_fd);
 }
 
 bool Connct::is_closed() const {
@@ -120,4 +120,12 @@ bool Connct::get_keep_alive() const {
 
 void Connct::set_keep_alive(bool val) {
     keep_alive = val;
+}
+
+bool Connct::is_epoll_registered() const {
+    return epoll_registered.load();
+}
+
+void Connct::mark_if_registered(bool val) {
+    epoll_registered.store(val);
 }

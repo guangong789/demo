@@ -31,10 +31,13 @@ public:
     void clear_read_buf(size_t n);
     bool get_keep_alive() const;
     void set_keep_alive(bool val);
+    bool is_epoll_registered() const;
+    void mark_if_registered(bool val);
 
 private:
     int m_fd;
     std::atomic<bool> closed = false;  // 线程安全关闭标记
+    std::atomic<bool> epoll_registered = true;
     std::mutex mtx;
     std::shared_ptr<ClientSocket> client;
     std::string m_write_data;          // 发送缓冲区

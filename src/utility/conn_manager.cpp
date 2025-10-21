@@ -1,6 +1,7 @@
 #include <mutex>
 #include <unistd.h>
 #include "utility/conn_manager.h"
+#include "utility/epoll.h"
 
 void ConnManager::add(int fd, std::shared_ptr<Connct> conn) {
     std::unique_lock<std::shared_mutex> locker(shared_mtx);
@@ -8,11 +9,9 @@ void ConnManager::add(int fd, std::shared_ptr<Connct> conn) {
 }
 
 void ConnManager::remove(int fd) {
-    std::shared_ptr<Connct> conn;
     std::unique_lock<std::shared_mutex> locker(shared_mtx);
     auto it = m_conns.find(fd);
     if (it != m_conns.end()) {
-        conn = it->second;
         m_conns.erase(it);
     }
 }
@@ -40,7 +39,7 @@ void ConnManager::sweep_closed(Epoll& ep) {
         if (conn && conn->is_closed()) {
             ep.ep_del(fd);
             conn->close();
-            to_remove.push_back(fd);
+            to_remove.emplace_back(fd);
         }
     }
     for (int fd : to_remove) {

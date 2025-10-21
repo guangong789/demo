@@ -10,7 +10,6 @@ namespace gaozu {
             ServerSocket(const std::string &ip, int port);
             ~ServerSocket();
 
-            int accept() override;
             std::shared_ptr<ClientSocket> accept_client();  // 封装连接fd
         };
     }

@@ -8,8 +8,9 @@
 #include <cstring>
 #include <errno.h>
 #include "utility/log_init.h"
+#include "utility/conn_manager.h"
 
-using namespace gaozu::logger;
+class ConnManager;
 
 class Epoll {
 public:
@@ -35,4 +36,5 @@ private:
     };
     std::mutex pending_mtx;
     std::queue<PendingOp> pending_ops;
+    ConnManager* conn_mng;
 };

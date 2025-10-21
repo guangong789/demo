@@ -18,22 +18,6 @@ ServerSocket::ServerSocket(const std::string &ip, int port) : Socket() {
 
 ServerSocket::~ServerSocket() {}
 
-int ServerSocket::accept() {
-    int connfd = ::accept(m_sockfd, nullptr, nullptr);
-    if (connfd < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) return -1;  // 正常情况
-        log_error("socket accept error: errno = %d, errmsg = %s", errno, strerror(errno));
-        return -1;
-    }
-
-    // 设置新客户端非阻塞
-    int flag = fcntl(connfd, F_GETFL, 0);
-    fcntl(connfd, F_SETFL, flag | O_NONBLOCK);
-
-    log_debug("Client %d set to non-blocking", connfd);
-    return connfd;
-}
-
 std::shared_ptr<ClientSocket> ServerSocket::accept_client() {
     int connfd = ::accept(m_sockfd, nullptr, nullptr);
     if (connfd < 0) {
@@ -45,7 +29,7 @@ std::shared_ptr<ClientSocket> ServerSocket::accept_client() {
     } else {
         auto client = std::make_shared<ClientSocket>(connfd);
         client->set_non_blocking();
-        log_info("New client connected: %d", connfd);
+        log_debug("New client connected: %d", connfd);
         return client;
     }
 }

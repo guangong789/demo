@@ -4,36 +4,24 @@ using namespace gaozu::logger;
 
 std::string Response::serialize(bool keep_alive) const {
     std::string res = "HTTP/1.1 " + std::to_string(status_code) + " " + status_msg + "\r\n";
-
-    // Content-Length
     res += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-
-    // Connection
     res += "Connection: " + std::string(keep_alive ? "keep-alive" : "close") + "\r\n";
-
-    // Content-Type，优先使用 headers 中设置的，没有则默认 text/plain
     auto it = headers.find("Content-Type");
     if (it != headers.end()) {
         res += "Content-Type: " + it->second + "\r\n";
     } else {
         res += "Content-Type: text/plain\r\n";
     }
-
-    // 其它 headers
     for (const auto& [key, value] : headers) {
         if (key != "Content-Type") {
             res += key + ": " + value + "\r\n";
         }
     }
-
-    res += "\r\n";  // header 与 body 分隔
-
+    res += "\r\n";
     res += body;
-
     log_info("Response serialized (%zu bytes):\n<<<%s>>>", res.size(), res.c_str());
     return res;
 }
-
 
 std::string Response::status_func(int code){
     switch (code) {

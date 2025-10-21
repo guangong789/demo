@@ -2,7 +2,8 @@
 #include <unordered_map>
 #include <shared_mutex>
 #include "connct.h"
-#include "epoll.h"
+
+class Epoll;
 
 class ConnManager {
 public:
