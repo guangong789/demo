@@ -15,6 +15,9 @@
 #include "utility/epoll.h"
 #include "utility/threadpool.h"
 #include "utility/conn_manager.h"
+#include "http/request.h"
+#include "http/response.h"
+#include "http/router.h"
 
 using namespace test::socket;
 using namespace gaozu::logger;
@@ -32,17 +35,22 @@ int main(int argc, char* argv[]) {
         .set_console(true)
         .set_level(Logger::INFO)
         .set_max_size(10 * 1024);
-
+    // 初始化router
+    Router::instance().add_route("/", [](const Request&) {
+        return Response::make_html(200, "<h1>Hello, HTTP Server!</h1>");
+    });
+    Router::instance().add_route("/api/echo", [](const Request& req) {
+        return Response::make_json(200, "{\"echo\":\"" + req.body + "\"}");
+    });
     // 创建服务器socket
     gaozu::socket::ServerSocket server("127.0.0.1", 8080);
     log_info("Server started on 127.0.0.1:8080 using epoll");
-    // 初始化
+    // 初始化epoll
     Epoll ep;
-    ep.ep_add(server.get_fd(), EPOLLIN);
+    ep.ep_add(server.get_fd(), EPOLLIN | EPOLLET);
     const int MAX_EVENTS = 1024;
     std::vector<struct epoll_event> events(MAX_EVENTS);
     ConnManager conn_mng;
-    // std::unordered_map<int, std::shared_ptr<Connct>> connections;
     Threadpool pool;
 
     while (running) {
@@ -62,7 +70,7 @@ int main(int argc, char* argv[]) {
                     }
                     auto conn = std::make_shared<Connct>(client);
                     int connfd = conn->get_fd();
-                    ep.ep_add(connfd, EPOLLIN);
+                    ep.ep_add(connfd, EPOLLIN | EPOLLET);
                     conn_mng.add(connfd, conn);
                 }
             } else if (ev & (EPOLLIN | EPOLLOUT)) {
@@ -72,34 +80,45 @@ int main(int argc, char* argv[]) {
                 auto conn_mng_ptr = &conn_mng;
                 pool.add_task([fd, conn, ev, ep_ptr, conn_mng_ptr]() {
                     if (ev & EPOLLIN) {
-                        std::string received;
-                        bool ok = conn->on_read(received);
+                        bool ok = conn->on_read();
                         if (!ok) {
-                            if (!conn->is_closed()) {
-                                ep_ptr->ep_del(fd);
-                                conn->close();
-                            }
+                            ep_ptr->ep_del(fd);
+                            conn->close();
                             conn_mng_ptr->remove(fd);
-                        } else {
-                            if (!received.empty()) {
-                                conn->send_data(received);
-                            }
-                            uint32_t new_event = EPOLLIN;
-                            if (conn->has_pending_data()) {
-                                new_event |= EPOLLOUT;
-                            }
-                            ep_ptr->ep_mod(fd, new_event);
+                            return;
                         }
-                    } else if (ev & EPOLLOUT) {
-                        bool ok = conn->on_write();
-                        if (!ok) {
-                            if (conn) {
+                        while (Request::is_complete(conn->get_read_buf())) {
+                            size_t req_len = Request::get_total_length(conn->get_read_buf());
+                            Request req = Request::parse(conn->get_read_buf().substr(0, req_len));
+
+                            conn->set_keep_alive(req.keep_alive);
+                            Response resp = Router::instance().handler(req);
+                            if (!conn->send_data(resp.serialize(req.keep_alive))) {
                                 ep_ptr->ep_del(fd);
                                 conn->close();
                                 conn_mng_ptr->remove(fd);
-                            } else {
-                                log_warn("fd %d already removed, skip", fd);
+                                return;
                             }
+                            conn->clear_read_buf(req_len);
+                            if (!conn->get_keep_alive()) {
+                                ep_ptr->ep_del(fd);
+                                conn->close();
+                                conn_mng_ptr->remove(fd);
+                                return;
+                            }
+                        }
+                        uint32_t new_event = EPOLLIN;
+                        if (conn->has_pending_data()) new_event |= EPOLLOUT;
+                        ep_ptr->ep_mod(fd, new_event);
+                    }
+                    if (ev & EPOLLOUT) {
+                        bool ok = conn->on_write();
+                        if (!ok) {
+                            ep_ptr->ep_del(fd);
+                            conn->close();
+                            conn_mng_ptr->remove(fd);
+                        } else if (!conn->has_pending_data()) {
+                            ep_ptr->ep_mod(fd, EPOLLIN);
                         }
                     }
                 });

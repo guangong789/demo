@@ -23,6 +23,13 @@ add_library(gaozu_socket STATIC
     src/socket/client_socket.cpp
 )
 
+# HTTP
+add_library(gaozu_http STATIC
+    src/http/request.cpp
+    src/http/response.cpp
+    src/http/router.cpp
+)
+
 # Utility 工具库
 add_library(gaozu_utility STATIC
     src/utility/logger.cpp
@@ -35,6 +42,7 @@ add_library(gaozu_utility STATIC
 # 设置库的包含目录
 target_include_directories(gaozu_socket PUBLIC include)
 target_include_directories(gaozu_utility PUBLIC include)
+target_include_directories(gaozu_http PUBLIC include)
 
 # 查找并链接线程库
 find_package(Threads REQUIRED)
@@ -46,7 +54,7 @@ target_link_libraries(gaozu_utility Threads::Threads)
 add_executable(server
     src/applications/server.cpp
 )
-target_link_libraries(server gaozu_socket gaozu_utility)
+target_link_libraries(server gaozu_socket gaozu_utility gaozu_http)
 
 # 可执行文件 - 客户端
 add_executable(client

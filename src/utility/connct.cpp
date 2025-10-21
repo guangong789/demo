@@ -2,11 +2,11 @@
 
 using namespace gaozu::logger;
 
-Connct::Connct(int fd, bool close) : m_fd(fd), closed(close) {
+Connct::Connct(int fd, bool close) : m_fd(fd), closed(close), keep_alive(false) {
     log_info("Connection created: %d", m_fd);
 }
 
-Connct::Connct(std::shared_ptr<ClientSocket> socket) : client(socket), m_fd(socket->get_fd()) {
+Connct::Connct(std::shared_ptr<ClientSocket> socket) : client(socket), m_fd(socket->get_fd()), keep_alive(false) {
     log_info("Connection created: %d", m_fd);
 }
 
@@ -18,51 +18,91 @@ int Connct::get_fd() const {
     return m_fd;
 }
 
-bool Connct::on_read(std::string& data) {
+bool Connct::on_read() {
     std::lock_guard<std::mutex> lock(mtx);
     if (is_closed()) return false;
-    char buf[1024];
-    ssize_t len = recv(m_fd, buf, sizeof(buf), 0);  // 从内核缓冲区读数据到buf
-    if (len < 0) {
-        if (errno == EINTR) return true;
-        if (errno == EAGAIN || errno == EWOULDBLOCK) return true;  // 没有数据可读
-        log_error("recv error from client %d: errno=%d, errmsg=%s", m_fd, errno, strerror(errno));
-        return false;
-    } else if (len == 0) {
-        log_info("Client %d disconnected", m_fd);
-        return false;
-    } else {
-        data.assign(buf, len);  // assign能够处理'\0'，存到外部data中
-        log_info("Received from client %d: %.100s", m_fd, buf);
-        return true;
+
+    char buf[4096];
+    while (true) {
+        ssize_t len = recv(m_fd, buf, sizeof(buf), 0);
+        if (len > 0) {
+            m_read_data.append(buf, len);
+        } else if (len == 0) { // 客户端关闭
+            return false;
+        } else {
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            if (errno == ECONNRESET) return false;
+            return false;
+        }
     }
+    return true;
 }
 
 bool Connct::send_data(const std::string& data) {
     if (data.empty()) return true;
+
+    std::lock_guard<std::mutex> lock(mtx);
+    if (is_closed()) return false;
+
+    // 追加待发送数据
     m_write_data += data;
-    // 先存到发送缓冲区，再尝试立即发送一次
-    ssize_t sent = send(m_fd, m_write_data.data(), m_write_data.size(), 0);
-    if (sent < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) return true;  // 内核缓冲区满了
-        log_error("send error to client %d: %s", m_fd, strerror(errno));
-        return false;
+
+    // 尝试发送尽可能多的数据
+    while (!m_write_data.empty()) {
+        ssize_t sent = send(m_fd, m_write_data.data(), m_write_data.size(), 0);
+        if (sent > 0) {
+            m_write_data.erase(0, sent);
+        } else if (sent == 0) {
+            break;
+        } else {
+            if (errno == EINTR) continue;  // 被信号打断，重试
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {  // 内核缓冲区满，先不要关闭连接，等待 EPOLLOUT 通知
+               
+                break;
+            }
+            if (errno == ECONNRESET || errno == EPIPE) {
+                log_info("Client %d closed connection during send", m_fd);
+                return false;  // 真正的连接关闭
+            }
+            log_error("send_data failed for client %d: %s", m_fd, strerror(errno));
+            return false;
+        }
     }
-    m_write_data.erase(0, sent);  // 发送成功就删除已发送的部分
+
+    if (!m_write_data.empty()) {
+        log_info("Partial data pending for client %d: %zu bytes left", m_fd, m_write_data.size());
+    }
     return true;
 }
 
 bool Connct::on_write() {
     std::lock_guard<std::mutex> lock(mtx);
-    if (is_closed()) return false;
-    if (m_write_data.empty()) return true;
-    ssize_t sent = send(m_fd, m_write_data.data(), m_write_data.size(), 0);
-    if (sent < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) return true;
-        log_error("on_write failed for client %d: %s", m_fd, strerror(errno));
-        return false;
+    if (is_closed() || m_write_data.empty()) return true;
+
+    while (!m_write_data.empty()) {
+        ssize_t sent = send(m_fd, m_write_data.data(), m_write_data.size(), 0);
+        if (sent > 0) {
+            m_write_data.erase(0, sent);
+        } else if (sent == 0) {
+            break;
+        } else {
+            if (errno == EINTR) continue;  // 被信号打断，重试
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {  // 内核缓冲区满，等待 EPOLLOUT
+                break;
+            }
+            if (errno == ECONNRESET || errno == EPIPE) {
+                log_info("Client %d closed connection during write", m_fd);
+                return false;
+            }
+            log_error("on_write failed for client %d: %s", m_fd, strerror(errno));
+            return false;
+        }
     }
-    m_write_data.erase(0, sent);
+
+    if (!m_write_data.empty()) {
+        log_info("Partial data still pending for client %d: %zu bytes", m_fd, m_write_data.size());
+    }
     return true;
 }
 
@@ -90,4 +130,21 @@ bool Connct::is_closed() const {
 void Connct::change_closed() {
     std::lock_guard<std::mutex> lock(mtx);
     closed = true;
+}
+
+std::string& Connct::get_read_buf() {
+    return m_read_data;
+}
+
+void Connct::clear_read_buf(size_t n) {
+    if (n >= m_read_data.size()) m_read_data.clear();
+    else m_read_data.erase(0, n);
+}
+
+bool Connct::get_keep_alive() const {
+    return keep_alive;
+}
+
+void Connct::set_keep_alive(bool val) {
+    keep_alive = val;
 }

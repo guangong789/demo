@@ -5,7 +5,7 @@ using namespace gaozu::logger;
 
 ServerSocket::ServerSocket(const std::string &ip, int port) : Socket() {
     // set_blocking();
-    set_non_blocking();  // 保证服务器响应性, 不影响主线程
+    set_non_blocking();  // 非阻塞
     set_recv_buffer(10 * 1024);
     set_send_buffer(10 * 1024);
     set_linger(true, 0);
@@ -44,7 +44,7 @@ std::shared_ptr<ClientSocket> ServerSocket::accept_client() {
         return nullptr;
     } else {
         auto client = std::make_shared<ClientSocket>(connfd);
-        client->set_blocking();
+        client->set_non_blocking();
         log_info("New client connected: %d", connfd);
         return client;
     }
