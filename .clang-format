@@ -1,7 +1,9 @@
-BasedOnStyle: Google
+Language: Cpp
+
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
+AccessModifierOffset: 0
 ColumnLimit: 0
 
 BreakBeforeBraces: Attach
