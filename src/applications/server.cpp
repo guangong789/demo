@@ -57,6 +57,9 @@ int main(int argc, char* argv[]) {
         int nready = ep.ep_wait(events, 500);  // wait and fetch
         if (!running) break;
         ep.flush_pending_ops();
+        conn_mng.sweep_inactive(ep, 30);
+        conn_mng.sweep_closed(ep);
+
         for (int i = 0; i < nready; ++i) {
             int fd = events[i].data.fd;
             uint32_t ev = events[i].events;
@@ -81,6 +84,7 @@ int main(int argc, char* argv[]) {
                             conn_mng.remove(fd);
                             return;
                         }
+                        conn_mng.touch(fd);
                         while (Request::is_complete(conn->get_read_buf())) {
                             size_t req_len = Request::get_total_length(conn->get_read_buf());
                             Request req = Request::parse(conn->get_read_buf().substr(0, req_len));
@@ -119,6 +123,7 @@ int main(int argc, char* argv[]) {
                             conn->close();
                             conn_mng.remove(fd);
                         } else if (!conn->has_pending_data()) {
+                            conn_mng.touch(fd);
                             ep.request_mod(fd, EPOLLIN);
                         }
                     }

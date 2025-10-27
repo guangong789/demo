@@ -3,9 +3,17 @@
 using namespace gaozu::logger;
 
 std::string Response::serialize(bool keep_alive) const {
-    std::string res = "HTTP/1.1 " + std::to_string(status_code) + " " + status_msg + "\r\n";
-    res += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-    res += "Connection: " + std::string(keep_alive ? "keep-alive" : "close") + "\r\n";
+    std::string res;
+    res.reserve(256 + body.size());
+    res += "HTTP/1.1 " + std::to_string(status_code) + " " + status_msg + "\r\n";  // 状态行
+    res += "Content-Length: " + std::to_string(body.size()) + "\r\n";  // 基础头部
+    if (keep_alive) {
+        res += "Connection: keep-alive\r\n";
+        res += "Keep-Alive: timeout=30, max=100\r\n";
+    } else {
+        res += "Connection: close\r\n";
+    }
+    // Content-Type 优先用户自定义，否则默认 text/plain
     auto it = headers.find("Content-Type");
     if (it != headers.end()) {
         res += "Content-Type: " + it->second + "\r\n";
@@ -13,13 +21,14 @@ std::string Response::serialize(bool keep_alive) const {
         res += "Content-Type: text/plain\r\n";
     }
     for (const auto& [key, value] : headers) {
-        if (key != "Content-Type") {
+        if (key != "Content-Type" && key != "Connection" && key != "Content-Length") {
             res += key + ": " + value + "\r\n";
         }
     }
-    res += "\r\n";
+    res += "\r\n";  // 结束头部
     res += body;
-    log_info("Response serialized (%zu bytes):\n<<<%s>>>", res.size(), res.c_str());
+    log_info("Response serialized (%zu bytes): status=%d, keep_alive=%s", 
+             res.size(), status_code, keep_alive ? "true" : "false");
     return res;
 }
 
